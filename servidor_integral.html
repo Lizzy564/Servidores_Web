@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modelado de Servidor Web — Cálculo Integral</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --accent: #00e5ff;
+    --accent2: #ff6b35;
+    --accent3: #a3e635;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --border: rgba(0,229,255,0.15);
+    --grid: rgba(0,229,255,0.04);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 4px 14px;
+    border-radius: 2px;
+    margin-bottom: 20px;
+    opacity: 0;
+    animation: fadeUp 0.6s 0.1s forwards;
+  }
+
+  h1 {
+    font-size: clamp(28px, 5vw, 52px);
+    font-weight: 800;
+    line-height: 1.1;
+    opacity: 0;
+    animation: fadeUp 0.6s 0.25s forwards;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 15px;
+    font-family: 'Space Mono', monospace;
+    opacity: 0;
+    animation: fadeUp 0.6s 0.4s forwards;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Cards grid */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+
+  @media (max-width: 680px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    opacity: 0;
+    animation: fadeUp 0.6s forwards;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+
+  .card.orange::before { background: linear-gradient(90deg, var(--accent2), transparent); }
+  .card.green::before  { background: linear-gradient(90deg, var(--accent3), transparent); }
+
+  .card-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .card h2 {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 18px;
+    color: var(--text);
+  }
+
+  /* Sliders */
+  .control-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+
+  .control-row label {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    min-width: 38px;
+  }
+
+  .control-row input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .control-row input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px; height: 16px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px var(--accent);
+    transition: transform 0.1s;
+  }
+
+  .control-row input[type=range]::-webkit-slider-thumb:hover {
+    transform: scale(1.3);
+  }
+
+  .control-row .val {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--text);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* Formula display */
+  .formula-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    margin-top: 14px;
+    color: var(--accent);
+    line-height: 1.7;
+  }
+
+  .formula-box .eq-line { color: var(--text); font-size: 12px; }
+  .formula-box .result  { color: var(--accent3); font-size: 18px; font-weight: 700; }
+
+  /* Big stat */
+  .stat-box {
+    text-align: center;
+    padding: 20px 0 8px;
+  }
+
+  .stat-num {
+    font-size: 64px;
+    font-weight: 800;
+    color: var(--accent3);
+    line-height: 1;
+    font-family: 'Space Mono', monospace;
+    text-shadow: 0 0 30px rgba(163,230,53,0.3);
+    transition: all 0.4s;
+  }
+
+  .stat-label {
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-top: 6px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* Canvas chart */
+  .chart-wrap {
+    position: relative;
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 20px 16px 16px;
+    margin-top: 4px;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+  }
+
+  .chart-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  /* Steps */
+  .steps-card {
+    grid-column: 1 / -1;
+  }
+
+  .steps-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-top: 4px;
+  }
+
+  @media (max-width: 680px) {
+    .steps-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .step {
+    background: var(--surface2);
+    border-radius: 10px;
+    padding: 18px 16px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+
+  .step-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--border);
+    position: absolute;
+    top: 10px; right: 14px;
+  }
+
+  .step-title {
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .step-content {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    line-height: 1.6;
+  }
+
+  .step-content .hl { color: var(--accent3); }
+
+  /* Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    margin-top: 4px;
+  }
+
+  th {
+    text-align: left;
+    color: var(--muted);
+    letter-spacing: 1px;
+    font-size: 10px;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    color: var(--text);
+  }
+
+  tr:hover td { background: rgba(0,229,255,0.03); }
+
+  td.hl { color: var(--accent3); font-weight: 700; }
+  td.ac { color: var(--accent); }
+
+  /* Animation delays */
+  .card:nth-child(1) { animation-delay: 0.3s; }
+  .card:nth-child(2) { animation-delay: 0.45s; }
+  .card:nth-child(3) { animation-delay: 0.6s; }
+  .card:nth-child(4) { animation-delay: 0.75s; }
+  .card:nth-child(5) { animation-delay: 0.9s; }
+
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+  }
+
+  .legend-rect {
+    width: 16px; height: 10px;
+    border-radius: 2px;
+    opacity: 0.5;
+  }
+
+  /* Animated line on chart */
+  .chart-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 10px;
+  }
+
+  .live-rate {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .live-rate span { color: var(--accent); font-size: 15px; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    margin-top: 56px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  footer span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <div class="badge">Cálculo Integral • Universidad Católica Luis Amigó</div>
+    <h1>Modelado del<br><span>Servidor Web</span></h1>
+    <p class="subtitle">r(t) = a + b·t — Integral definida aplicada a sistemas informáticos</p>
+  </header>
+
+  <!-- Row 1: Controls + Result -->
+  <div class="grid">
+
+    <!-- Controls -->
+    <div class="card" style="animation-delay:0.3s">
+      <div class="card-label">Parámetros del modelo</div>
+      <h2>Configura r(t) = a + b·t</h2>
+
+      <div class="control-row">
+        <label>a</label>
+        <input type="range" id="paramA" min="10" max="300" value="100" step="5">
+        <span class="val" id="valA">100</span>
+      </div>
+      <div class="control-row">
+        <label>b</label>
+        <input type="range" id="paramB" min="0" max="60" value="20" step="1">
+        <span class="val" id="valB">20</span>
+      </div>
+      <div class="control-row">
+        <label>t₀</label>
+        <input type="range" id="paramT0" min="0" max="10" value="0" step="0.5">
+        <span class="val" id="valT0">0</span>
+      </div>
+      <div class="control-row">
+        <label>t₁</label>
+        <input type="range" id="paramT1" min="1" max="12" value="5" step="0.5">
+        <span class="val" id="valT1">5</span>
+      </div>
+
+      <div class="formula-box" id="formulaDisplay">
+        <div class="eq-line">Función de tasa:</div>
+        r(t) = 100 + 20t<br>
+        <div class="eq-line" style="margin-top:8px">Integral definida:</div>
+        ∫₀⁵ (100 + 20t) dt<br>
+        <div class="eq-line" style="margin-top:8px">Antiderivada:</div>
+        = [100t + 10t²]₀⁵<br>
+        <div class="eq-line" style="margin-top:8px">Resultado:</div>
+        <span class="result" id="resultInline">= 750 solicitudes</span>
+      </div>
+    </div>
+
+    <!-- Big result + table -->
+    <div class="card green" style="animation-delay:0.45s">
+      <div class="card-label">Total acumulado</div>
+      <h2>Solicitudes procesadas</h2>
+
+      <div class="stat-box">
+        <div class="stat-num" id="bigResult">750</div>
+        <div class="stat-label">solicitudes en el intervalo</div>
+      </div>
+
+      <table id="dataTable" style="margin-top:20px">
+        <thead>
+          <tr>
+            <th>Hora (t)</th>
+            <th>r(t) sol/h</th>
+            <th>Acumulado</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Chart row -->
+  <div class="grid">
+    <div class="card" style="grid-column:1/-1; animation-delay:0.6s">
+      <div class="card-label">Visualización gráfica</div>
+      <div class="chart-info">
+        <h2>Área bajo la curva = Total de solicitudes</h2>
+        <div class="live-rate">r(t₁) = <span id="rateAtEnd">200</span> sol/h</div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="chart-title">Tasa de solicitudes vs. tiempo (t horas)</div>
+        <canvas id="mainChart" height="260"></canvas>
+      </div>
+
+      <div class="legend" style="margin-top:14px">
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#00e5ff"></div>
+          r(t) = tasa de solicitudes
+        </div>
+        <div class="legend-item">
+          <div class="legend-rect" style="background:#00e5ff"></div>
+          Área = solicitudes acumuladas
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#ff6b35"></div>
+          Límites de integración
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="grid">
+    <div class="card steps-card" style="animation-delay:0.75s">
+      <div class="card-label">Proceso de solución</div>
+      <h2>Pasos del cálculo integral</h2>
+      <div class="steps-grid">
+        <div class="step">
+          <div class="step-num">01</div>
+          <div class="step-title">Definir función</div>
+          <div class="step-content" id="step1">r(t) = <span class="hl">100</span> + <span class="hl">20</span>t</div>
+        </div>
+        <div class="step">
+          <div class="step-num">02</div>
+          <div class="step-title">Plantear integral</div>
+          <div class="step-content" id="step2">∫₀⁵ (100 + 20t) dt</div>
+        </div>
+        <div class="step">
+          <div class="step-num">03</div>
+          <div class="step-title">Antiderivada</div>
+          <div class="step-content" id="step3">= 100t + 10t²</div>
+        </div>
+        <div class="step">
+          <div class="step-num">04</div>
+          <div class="step-title">Evaluar</div>
+          <div class="step-content" id="step4">[500+250]−[0]<br>= <span class="hl">750</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Ana Liceth Moreno Trujillo &amp; Camilo Marín Marín •
+    Docente: <span>Franklin Ferraro Gómez</span> •
+    Cálculo Integral — Ing. Sistemas
+  </footer>
+
+</div>
+
+<script>
+  // --- State ---
+  let a = 100, b = 20, t0 = 0, t1 = 5;
+
+  // --- Helpers ---
+  const r = t => a + b * t;
+  const integral = (lo, hi) => (a * hi + 0.5 * b * hi * hi) - (a * lo + 0.5 * b * lo * lo);
+  const fmt = n => Math.round(n * 10) / 10;
+
+  // --- DOM refs ---
+  const bigResult    = document.getElementById('bigResult');
+  const resultInline = document.getElementById('resultInline');
+  const formulaBox   = document.getElementById('formulaDisplay');
+  const tableBody    = document.getElementById('tableBody');
+  const rateAtEnd    = document.getElementById('rateAtEnd');
+  const step1 = document.getElementById('step1');
+  const step2 = document.getElementById('step2');
+  const step3 = document.getElementById('step3');
+  const step4 = document.getElementById('step4');
+
+  // --- Update formula display ---
+  function updateFormula() {
+    const total = integral(t0, t1);
+    const B = b / 2;
+    const Fhi = a * t1 + B * t1 * t1;
+    const Flo = a * t0 + B * t0 * t0;
+
+    document.getElementById('valA').textContent = a;
+    document.getElementById('valB').textContent = b;
+    document.getElementById('valT0').textContent = fmt(t0);
+    document.getElementById('valT1').textContent = fmt(t1);
+
+    formulaBox.innerHTML = `
+      <div class="eq-line">Función de tasa:</div>
+      r(t) = ${a} + ${b}t<br>
+      <div class="eq-line" style="margin-top:8px">Integral definida:</div>
+      ∫<sub>${fmt(t0)}</sub><sup>${fmt(t1)}</sup> (${a} + ${b}t) dt<br>
+      <div class="eq-line" style="margin-top:8px">Antiderivada:</div>
+      = [${a}t + ${B}t²]<sub>${fmt(t0)}</sub><sup>${fmt(t1)}</sup><br>
+      <div class="eq-line" style="margin-top:8px">Evaluación:</div>
+      [${fmt(Fhi)}] − [${fmt(Flo)}]<br>
+      <span class="result" id="resultInline">= ${Math.round(total)} solicitudes</span>
+    `;
+
+    bigResult.textContent = Math.round(total).toLocaleString('es');
+    rateAtEnd.textContent = fmt(r(t1));
+
+    // Steps
+    step1.innerHTML = `r(t) = <span class="hl">${a}</span> + <span class="hl">${b}</span>t`;
+    step2.innerHTML = `∫<sub>${fmt(t0)}</sub><sup>${fmt(t1)}</sup> (${a} + ${b}t) dt`;
+    step3.innerHTML = `= ${a}t + ${B}t²`;
+    step4.innerHTML = `[${fmt(Fhi)}]−[${fmt(Flo)}]<br>= <span class="hl">${Math.round(total)}</span>`;
+  }
+
+  // --- Update table ---
+  function updateTable() {
+    tableBody.innerHTML = '';
+    const steps = 6;
+    const span = t1 - t0;
+    for (let i = 0; i <= steps; i++) {
+      const t = t0 + (span / steps) * i;
+      const rate = r(t);
+      const acc  = integral(t0, t);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="ac">${fmt(t)} h</td>
+        <td>${fmt(rate)}</td>
+        <td class="hl">${Math.round(acc)}</td>
+      `;
+      tableBody.appendChild(tr);
+    }
+  }
+
+  // --- Canvas chart ---
+  const canvas = document.getElementById('mainChart');
+  const ctx = canvas.getContext('2d');
+
+  function resizeCanvas() {
+    canvas.width  = canvas.offsetWidth * window.devicePixelRatio;
+    canvas.height = 260 * window.devicePixelRatio;
+    ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  }
+
+  function drawChart() {
+    const W = canvas.offsetWidth;
+    const H = 260;
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = { top: 20, right: 24, bottom: 40, left: 58 };
+    const cW = W - pad.left - pad.right;
+    const cH = H - pad.top - pad.bottom;
+
+    // Data range
+    const tMin = 0, tMax = t1 + 0.5;
+    const rMax = r(tMax) * 1.15;
+
+    const tx = t => pad.left + (t - tMin) / (tMax - tMin) * cW;
+    const ty = v => pad.top  + (1 - v / rMax) * cH;
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(0,229,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const y = pad.top + (i / 5) * cH;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cW, y); ctx.stroke();
+    }
+    for (let i = 0; i <= 6; i++) {
+      const x = pad.left + (i / 6) * cW;
+      ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + cH); ctx.stroke();
+    }
+
+    // Shaded area under curve (from t0 to t1)
+    ctx.beginPath();
+    ctx.moveTo(tx(t0), ty(0));
+    for (let t = t0; t <= t1; t += 0.05) {
+      ctx.lineTo(tx(t), ty(r(t)));
+    }
+    ctx.lineTo(tx(t1), ty(r(t1)));
+    ctx.lineTo(tx(t1), ty(0));
+    ctx.closePath();
+    const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + cH);
+    grad.addColorStop(0, 'rgba(0,229,255,0.25)');
+    grad.addColorStop(1, 'rgba(0,229,255,0.02)');
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Vertical limit lines
+    ctx.strokeStyle = '#ff6b35';
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.5;
+    [t0, t1].forEach(t => {
+      ctx.beginPath();
+      ctx.moveTo(tx(t), ty(0));
+      ctx.lineTo(tx(t), ty(r(t)));
+      ctx.stroke();
+    });
+    ctx.setLineDash([]);
+
+    // Main line r(t)
+    ctx.beginPath();
+    ctx.strokeStyle = '#00e5ff';
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = '#00e5ff';
+    ctx.shadowBlur = 8;
+    for (let t = tMin; t <= tMax; t += 0.05) {
+      t === tMin ? ctx.moveTo(tx(t), ty(r(t))) : ctx.lineTo(tx(t), ty(r(t)));
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Dots at limits
+    [t0, t1].forEach(t => {
+      ctx.beginPath();
+      ctx.arc(tx(t), ty(r(t)), 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff6b35';
+      ctx.fill();
+    });
+
+    // X-axis labels
+    ctx.fillStyle = 'rgba(100,116,139,0.9)';
+    ctx.font = '11px Space Mono, monospace';
+    ctx.textAlign = 'center';
+    const xSteps = Math.ceil(tMax);
+    for (let i = 0; i <= xSteps; i++) {
+      ctx.fillText(i, tx(i), pad.top + cH + 18);
+    }
+    ctx.fillText('t (horas)', pad.left + cW / 2, H - 2);
+
+    // Y-axis labels
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 4; i++) {
+      const v = rMax * (1 - i / 4);
+      ctx.fillText(Math.round(v), pad.left - 8, ty(v) + 4);
+    }
+
+    // Y-axis title
+    ctx.save();
+    ctx.translate(12, pad.top + cH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('sol/hora', 0, 0);
+    ctx.restore();
+  }
+
+  // --- Full update ---
+  function update() {
+    updateFormula();
+    updateTable();
+    drawChart();
+  }
+
+  // --- Sliders ---
+  document.getElementById('paramA').addEventListener('input', e => { a = +e.target.value; update(); });
+  document.getElementById('paramB').addEventListener('input', e => { b = +e.target.value; update(); });
+  document.getElementById('paramT0').addEventListener('input', e => {
+    t0 = +e.target.value;
+    if (t0 >= t1) { t0 = t1 - 0.5; e.target.value = t0; }
+    update();
+  });
+  document.getElementById('paramT1').addEventListener('input', e => {
+    t1 = +e.target.value;
+    if (t1 <= t0) { t1 = t0 + 0.5; e.target.value = t1; }
+    update();
+  });
+
+  // --- Init ---
+  window.addEventListener('resize', () => { resizeCanvas(); drawChart(); });
+  resizeCanvas();
+  update();
+</script>
+</body>
+</html>
